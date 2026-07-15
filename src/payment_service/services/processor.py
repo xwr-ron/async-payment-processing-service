@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from payment_service.domain.enums import PaymentStatus
 from payment_service.domain.models import Payment
-from payment_service.services.exceptions import PaymentNotFoundError
+from payment_service.services.exceptions import PaymentNotFoundError, PermanentProcessingError
 from payment_service.services.gateway import PaymentGateway
 from payment_service.services.webhooks import PaymentWebhook, WebhookClient
 
@@ -24,11 +24,11 @@ class PaymentProcessor:
         self._gateway = gateway
         self._webhook_client = webhook_client
 
-    async def process(self, payment_id: uuid.UUID, event_id: uuid.UUID) -> None:
+    async def process(self, payment_id: uuid.UUID, event_id: uuid.UUID, request_id: str) -> None:
         # Раздельные транзакции важны для retry: после успешного шлюза ошибка
         # webhook не должна приводить к повторной обработке самого платежа
         await self._process_gateway_once(payment_id)
-        await self._deliver_webhook_once(payment_id, event_id)
+        await self._deliver_webhook_once(payment_id, event_id, request_id)
 
     async def _process_gateway_once(self, payment_id: uuid.UUID) -> None:
         async with self._session_factory() as session, session.begin():
@@ -41,19 +41,26 @@ class PaymentProcessor:
             payment.status = outcome.value
             payment.processed_at = datetime.now(UTC)
 
-    async def _deliver_webhook_once(self, payment_id: uuid.UUID, event_id: uuid.UUID) -> None:
+    async def _deliver_webhook_once(
+        self,
+        payment_id: uuid.UUID,
+        event_id: uuid.UUID,
+        request_id: str,
+    ) -> None:
         delivery_error: Exception | None = None
 
         async with self._session_factory() as session, session.begin():
             payment = await self._locked_payment(session, payment_id)
 
             if payment.status == PaymentStatus.PENDING.value:
-                raise RuntimeError("cannot deliver a webhook for an unprocessed payment")
+                raise PermanentProcessingError(
+                    "cannot deliver a webhook for an unprocessed payment"
+                )
             if payment.webhook_delivered_at is not None:
                 # Успешно доставленный webhook не отправляется повторно при дубле
                 return
             if payment.processed_at is None:
-                raise RuntimeError("processed payment has no processed_at timestamp")
+                raise PermanentProcessingError("processed payment has no processed_at timestamp")
 
             payment.webhook_attempts += 1
 
@@ -65,7 +72,11 @@ class PaymentProcessor:
             )
 
             try:
-                await self._webhook_client.send(payment.webhook_url, payload)
+                await self._webhook_client.send(
+                    payment.webhook_url,
+                    payload,
+                    request_id=request_id,
+                )
             except Exception as exc:
                 payment.last_webhook_error = str(exc)[:2000]
                 delivery_error = exc

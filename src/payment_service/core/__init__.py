@@ -1,1 +1,1 @@
-"""Cross-cutting application configuration"""
+"""Общая конфигурация приложения"""

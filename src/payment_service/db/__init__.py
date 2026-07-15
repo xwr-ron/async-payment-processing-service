@@ -1,1 +1,1 @@
-"""Database infrastructure"""
+"""Инфраструктура базы данных"""

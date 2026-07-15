@@ -34,7 +34,6 @@ def retry_routing_key(next_attempt: int) -> str:
 
 async def declare_payment_topology(broker: RabbitBroker, settings: Settings) -> None:
     """Объявляет устойчивую RabbitMQ-топологию обработки платежей"""
-
     payments_exchange = await broker.declare_exchange(PAYMENTS_EXCHANGE)
     payments_queue = await broker.declare_queue(PAYMENTS_QUEUE)
     await payments_queue.bind(payments_exchange, routing_key=PAYMENTS_ROUTING_KEY)
@@ -42,7 +41,7 @@ async def declare_payment_topology(broker: RabbitBroker, settings: Settings) -> 
     retry_exchange = await broker.declare_exchange(PAYMENTS_RETRY_EXCHANGE)
 
     for next_attempt in range(2, settings.consumer_max_attempts + 1):
-        # Для попыток 2, 3, ... задержка равна base, base*2, ...
+        # Для последующих попыток задержка равна base, затем base*2 и далее по экспоненте
         delay_seconds = settings.consumer_retry_base_seconds * (2 ** (next_attempt - 2))
         routing_key = retry_routing_key(next_attempt)
 

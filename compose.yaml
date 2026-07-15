@@ -1,0 +1,113 @@
+name: async-payment-processing
+
+x-app-environment: &app-environment
+  APP_ENV: local
+  API_KEY: ${API_KEY:-local-development-key}
+  DATABASE_URL: postgresql+asyncpg://payments:payments@postgres:5432/payments
+  RABBITMQ_URL: amqp://payments:payments@rabbitmq:5672/
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  WEBHOOK_ALLOW_PRIVATE_HOSTS: ${WEBHOOK_ALLOW_PRIVATE_HOSTS:-false}
+
+x-app: &app
+  build:
+    context: .
+  environment: *app-environment
+  restart: unless-stopped
+  init: true
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: payments
+      POSTGRES_USER: payments
+      POSTGRES_PASSWORD: payments
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payments -d payments"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: payments
+      RABBITMQ_DEFAULT_PASS: payments
+    ports:
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  api:
+    <<: *app
+    command:
+      - /bin/sh
+      - -c
+      - alembic upgrade head && exec uvicorn payment_service.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import os, urllib.request;
+          r=urllib.request.Request('http://localhost:8000/health/ready',headers={'X-API-Key':os.environ['API_KEY']});
+          urllib.request.urlopen(r,timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  consumer:
+    <<: *app
+    command: ["python", "-m", "payment_service.consumer"]
+    environment:
+      <<: *app-environment
+      # Локальный test sink находится во внутренней сети Compose. Вне этого
+      # окружения защита private-host webhook по умолчанию остаётся включённой.
+      WEBHOOK_ALLOW_PRIVATE_HOSTS: "true"
+    depends_on:
+      api:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      webhook-sink:
+        condition: service_healthy
+
+  webhook-sink:
+    <<: *app
+    build:
+      context: .
+      target: webhook-test
+    command: ["python", "scripts/webhook_receiver.py"]
+    ports:
+      - "127.0.0.1:18080:8080"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://localhost:8080/health',timeout=2)
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+volumes:
+  postgres-data:
+  rabbitmq-data:

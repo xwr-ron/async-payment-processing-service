@@ -5,6 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Настройки приложения из переменных окружения и файла .env"""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -15,7 +17,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     app_env: str = "local"
     app_name: str = "async-payment-processing-service"
-    api_key: SecretStr = SecretStr("change-me")
+    api_key: SecretStr = SecretStr("local-development-key")
 
     database_url: str = "postgresql+asyncpg://payments:payments@localhost:5432/payments"
     rabbitmq_url: str = "amqp://payments:payments@localhost:5672/"

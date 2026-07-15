@@ -43,7 +43,12 @@ class PaymentService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def create(self, data: PaymentCreate, idempotency_key: str) -> Payment:
+    async def create(
+        self,
+        data: PaymentCreate,
+        idempotency_key: str,
+        request_id: str | None = None,
+    ) -> Payment:
         fingerprint = request_fingerprint(data)
         payment_id = uuid.uuid4()
         event_id = uuid.uuid4()
@@ -77,6 +82,7 @@ class PaymentService:
                     event_id=event_id,
                     payment_id=payment_id,
                     occurred_at=occurred_at,
+                    request_id=request_id or str(event_id),
                 )
 
                 # Платёж и outbox-событие фиксируются одной транзакцией: невозможно

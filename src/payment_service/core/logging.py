@@ -5,6 +5,8 @@ from typing import Any
 
 
 class JsonFormatter(logging.Formatter):
+    """Форматирует структурированные логи в JSON"""
+
     _reserved = frozenset(logging.makeLogRecord({}).__dict__) | {"message", "asctime"}
 
     def format(self, record: logging.LogRecord) -> str:

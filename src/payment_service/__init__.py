@@ -1,1 +1,1 @@
-"""Asynchronous payment processing service"""
+"""Сервис асинхронной обработки платежей"""

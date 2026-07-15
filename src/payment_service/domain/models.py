@@ -33,6 +33,8 @@ class Payment(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # PostgreSQL NUMERIC, в отличие от IEEE 754 float, хранит сумму как точное
+    # десятичное значение и не вносит погрешность при записи и чтении денег
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     description: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -72,7 +74,8 @@ class OutboxEvent(Base):
     __tablename__ = "outbox"
     __table_args__ = (
         Index(
-            "ix_outbox_unpublished_created_at",
+            "ix_outbox_unpublished_next_attempt_created_at",
+            "next_attempt_at",
             "created_at",
             # Частичный индекс остаётся небольшим после накопления истории:
             # relay ищет только ещё не опубликованные события

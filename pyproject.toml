@@ -59,11 +59,33 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "RUF"]
-ignore = ["B008", "RUF002", "RUF003"]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "RUF", "D", "N", "C90", "S"]
+ignore = [
+    # Внутреннее приложение не требует docstring для каждого модуля и очевидного callable
+    "D100",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "D107",
+    # Совместимость правил и принятый стиль без точки в конце docstring
+    "D203",
+    "D213",
+    "D400",
+    "D401",
+    "D415",
+    # Русскоязычные комментарии и документация намеренно используют Unicode
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
 
 [tool.ruff.lint.per-file-ignores]
 "migrations/versions/*.py" = ["E501"]
+"scripts/smoke_test.py" = ["S101", "S310"]
+"scripts/webhook_receiver.py" = ["S104"]
+"src/payment_service/services/gateway.py" = ["S311"]
+"tests/**/*.py" = ["D101", "S101"]
 
 [tool.mypy]
 python_version = "3.12"

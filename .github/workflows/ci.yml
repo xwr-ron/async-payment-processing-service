@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install uv
+        run: pip install uv==0.11.24
+      - name: Install dependencies
+        run: uv sync --frozen --all-groups
+      - name: Quality gates
+        run: make check
+
+  compose-smoke:
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install uv
+        run: pip install uv==0.11.24
+      - name: Install test dependencies
+        run: uv sync --frozen --all-groups
+      - name: Start stack
+        run: docker compose up --build -d --wait
+      - name: Run smoke test
+        run: make smoke
+      - name: Verify migration drift
+        run: docker compose exec -T api alembic check
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose logs --no-color api consumer postgres rabbitmq
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v

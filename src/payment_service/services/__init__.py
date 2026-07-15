@@ -1,1 +1,1 @@
-"""Application services"""
+"""Прикладные сервисы"""

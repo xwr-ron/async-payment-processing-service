@@ -43,7 +43,7 @@ class OutboxRelay:
     async def publish_batch(self) -> int:
         published = 0
         async with self._session_factory() as session, session.begin():
-            # SKIP LOCKED!! позволяет безопасно запустить несколько relay-процессов:
+            # SKIP LOCKED позволяет безопасно запустить несколько relay-процессов:
             # каждый экземпляр получит собственную непересекающуюся пачку событий
             events = list(
                 (
@@ -61,6 +61,8 @@ class OutboxRelay:
             )
             for event in events:
                 event.publish_attempts += 1
+                request_id = str(event.payload.get("request_id", event.id))
+
                 try:
                     # persist сохраняет сообщение при рестарте RabbitMQ, mandatory
                     # не позволяет молча потерять его при отсутствии маршрута
@@ -74,7 +76,7 @@ class OutboxRelay:
                         message_id=str(event.id),
                         correlation_id=str(event.aggregate_id),
                         message_type=event.event_type,
-                        headers={"x-attempt": 1},
+                        headers={"x-attempt": 1, "x-request-id": request_id},
                     )
                 except Exception as exc:
                     event.last_error = str(exc)[:2000]
@@ -84,7 +86,13 @@ class OutboxRelay:
                     event.next_attempt_at = datetime.now(UTC) + timedelta(seconds=backoff_seconds)
                     logger.warning(
                         "outbox event publication failed",
-                        extra={"event_id": event.id, "attempt": event.publish_attempts},
+                        extra={
+                            "request_id": request_id,
+                            "event_id": event.id,
+                            "payment_id": event.aggregate_id,
+                            "outbox_event_id": event.id,
+                            "message_attempt": event.publish_attempts,
+                        },
                     )
                 else:
                     # published_at выставляется только после publisher confirm
@@ -92,10 +100,18 @@ class OutboxRelay:
                     # обязан оставаться идемпотентным
                     event.published_at = datetime.now(UTC)
                     event.last_error = None
+
                     published += 1
+
                     logger.info(
                         "outbox event published",
-                        extra={"event_id": event.id, "payment_id": event.aggregate_id},
+                        extra={
+                            "request_id": request_id,
+                            "event_id": event.id,
+                            "payment_id": event.aggregate_id,
+                            "outbox_event_id": event.id,
+                            "message_attempt": event.publish_attempts,
+                        },
                     )
 
         return published
