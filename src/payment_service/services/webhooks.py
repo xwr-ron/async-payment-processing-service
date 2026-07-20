@@ -4,6 +4,7 @@ import socket
 import uuid
 from datetime import datetime
 from http import HTTPStatus
+from typing import Literal
 
 import httpx
 from pydantic import BaseModel, ConfigDict
@@ -21,7 +22,7 @@ class PaymentWebhook(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     event_id: uuid.UUID
-    event_type: str = "payment.processed"
+    event_type: Literal["payment.processed"] = "payment.processed"
     payment_id: uuid.UUID
     status: PaymentStatus
     processed_at: datetime

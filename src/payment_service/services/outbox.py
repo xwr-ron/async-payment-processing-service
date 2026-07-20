@@ -92,6 +92,8 @@ class OutboxRelay:
                             "payment_id": event.aggregate_id,
                             "outbox_event_id": event.id,
                             "message_attempt": event.publish_attempts,
+                            "error_type": type(exc).__name__,
+                            "error": event.last_error,
                         },
                     )
                 else:

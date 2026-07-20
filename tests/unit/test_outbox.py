@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -68,16 +69,19 @@ async def test_publish_batch_marks_confirmed_event() -> None:
     }
 
 
-async def test_publish_failure_is_recorded_with_backoff() -> None:
+async def test_publish_failure_is_recorded_with_backoff(caplog) -> None:
     event = make_outbox_event()
     before = datetime.now(UTC)
 
-    assert await relay([event], FakeBroker(ConnectionError("rabbit down"))).publish_batch() == 0
+    with caplog.at_level(logging.WARNING, logger="payment_service.services.outbox"):
+        assert await relay([event], FakeBroker(ConnectionError("rabbit down"))).publish_batch() == 0
 
     assert event.published_at is None
     assert event.publish_attempts == 1
     assert event.last_error == "rabbit down"
     assert event.next_attempt_at > before
+    assert caplog.records[0].error_type == "ConnectionError"
+    assert caplog.records[0].error == "rabbit down"
 
 
 async def test_empty_batch_does_nothing() -> None:

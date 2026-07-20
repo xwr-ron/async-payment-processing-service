@@ -1,7 +1,9 @@
 from functools import lru_cache
 
-from pydantic import Field, SecretStr, ValidationInfo, field_validator
+from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from payment_service.core.constants import DEFAULT_LOCAL_API_KEY
 
 
 class Settings(BaseSettings):
@@ -17,7 +19,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     app_env: str = "local"
     app_name: str = "async-payment-processing-service"
-    api_key: SecretStr = SecretStr("local-development-key")
+    api_key: SecretStr = SecretStr(DEFAULT_LOCAL_API_KEY)
 
     database_url: str = "postgresql+asyncpg://payments:payments@localhost:5432/payments"
     rabbitmq_url: str = "amqp://payments:payments@localhost:5672/"
@@ -40,6 +42,11 @@ class Settings(BaseSettings):
     def normalize_log_level(cls, value: str) -> str:
         return value.upper()
 
+    @field_validator("app_env")
+    @classmethod
+    def normalize_app_env(cls, value: str) -> str:
+        return value.lower()
+
     @field_validator("payment_processing_max_seconds")
     @classmethod
     def validate_processing_range(cls, value: float, info: ValidationInfo) -> float:
@@ -49,6 +56,13 @@ class Settings(BaseSettings):
             raise ValueError("must be greater than or equal to payment_processing_min_seconds")
 
         return value
+
+    @model_validator(mode="after")
+    def validate_non_local_api_key(self) -> "Settings":
+        if self.app_env != "local" and self.api_key.get_secret_value() == DEFAULT_LOCAL_API_KEY:
+            raise ValueError("API_KEY must be changed outside local environment")
+
+        return self
 
 
 @lru_cache

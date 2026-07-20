@@ -184,8 +184,14 @@ def dlq_contains(payment_id: str) -> bool | None:
 
 def verify_happy_path() -> None:
     request_id = f"request-happy-{uuid.uuid4()}"
+    ack_before_initial = queue_ack_count("payments.new")
     payment_id, _ = create_payment("/success", request_id)
     payment = payment_when(payment_id, lambda value: value["webhook_delivered_at"] is not None)
+    wait_until(
+        "initial event acknowledgement",
+        lambda: True if queue_ack_count("payments.new") > ack_before_initial else None,
+        timeout=10,
+    )
 
     assert payment["status"] in {"succeeded", "failed"}
     assert payment["webhook_attempts"] == 1

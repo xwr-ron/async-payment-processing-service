@@ -42,7 +42,7 @@ class PaymentCreate(BaseModel):
     description: str = Field(
         min_length=1,
         max_length=500,
-        description="Описание платежа, видимое получателю webhook",
+        description="Описание платежа",
         examples=["Оплата заказа #42"],
     )
     metadata: dict[str, JsonValue] = Field(

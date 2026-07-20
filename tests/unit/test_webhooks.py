@@ -27,6 +27,17 @@ def payload() -> PaymentWebhook:
     )
 
 
+def test_webhook_event_type_is_strict() -> None:
+    with pytest.raises(ValueError):
+        PaymentWebhook(
+            event_id=uuid.uuid4(),
+            event_type="payment.created",
+            payment_id=uuid.uuid4(),
+            status=PaymentStatus.SUCCEEDED,
+            processed_at=datetime.now(UTC),
+        )
+
+
 @pytest.mark.parametrize("address", ["127.0.0.1", "10.0.0.1", "169.254.169.254", "::1"])
 def test_private_addresses_are_unsafe(address: str) -> None:
     assert is_unsafe_address(address)

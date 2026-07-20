@@ -55,6 +55,7 @@ def test_english_openapi_schema_localizes_routes_and_models() -> None:
     )
     assert request_id["description"] == "Optional identifier for end-to-end request tracing"
     assert properties["amount"]["description"] == "Payment amount with two decimal places"
+    assert properties["description"]["description"] == "Payment description"
     detail = schema["components"]["schemas"]["PaymentDetail"]["properties"]
     assert detail["last_webhook_error"]["description"].startswith("Most recent webhook error")
     assert schema["components"]["securitySchemes"]["ApiKeyAuth"]["description"] == (
